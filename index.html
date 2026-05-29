@@ -1,250 +1,400 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
-  <title>Buddha AR</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Buddha AR Experience</title>
 
-  <!-- Three.js r134 — stable, has GLTFLoader on same version -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
-  <!-- GLTFLoader matching r134 -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
+  <!-- Three.js + WebXR -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Lato:wght@300;400&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --gold: #c9a84c;
+      --gold-light: #f0d080;
+      --deep: #0d0a06;
+      --ink: #1a1408;
+      --stone: #8b7355;
+      --lotus: #e8d5b0;
+      --glow: rgba(201,168,76,0.35);
+    }
 
     html, body {
       width: 100%; height: 100%;
-      background: transparent;
+      background: var(--deep);
+      font-family: 'Lato', sans-serif;
+      color: var(--lotus);
       overflow: hidden;
     }
 
-    #c {
+    /* ── CANVAS ── */
+    #three-canvas {
       position: fixed; inset: 0;
       display: block;
-      width: 100% !important;
-      height: 100% !important;
     }
 
-    /* ── LOADING ── */
-    #ls {
-      position: fixed; inset: 0; z-index: 300;
-      background: radial-gradient(ellipse at center, #1a1408, #080502);
+    /* ── LOADING SCREEN ── */
+    #loading-screen {
+      position: fixed; inset: 0;
+      background: radial-gradient(ellipse at center, #1a1408 0%, #0d0a06 100%);
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      transition: opacity .7s ease;
+      z-index: 100;
+      transition: opacity 0.8s ease;
     }
-    #ls.out { opacity: 0; pointer-events: none; }
+    #loading-screen.hidden { opacity: 0; pointer-events: none; }
 
-    .ring {
-      width: 90px; height: 90px;
-      border: 2px solid #c9a84c; border-radius: 50%;
+    .mandala {
+      width: 120px; height: 120px;
+      border: 2px solid var(--gold);
+      border-radius: 50%;
       position: relative;
-      animation: spin 6s linear infinite;
-      margin-bottom: 20px;
-      box-shadow: 0 0 30px rgba(201,168,76,.4);
+      animation: spin 8s linear infinite;
+      margin-bottom: 28px;
+      box-shadow: 0 0 40px var(--glow);
     }
-    .ring::after {
+    .mandala::before, .mandala::after {
       content: '';
-      position: absolute; inset: 28px;
-      background: #c9a84c; border-radius: 50%;
-      animation: blink 2s ease-in-out infinite;
+      position: absolute; inset: 8px;
+      border: 1px solid rgba(201,168,76,0.4);
+      border-radius: 50%;
     }
-    @keyframes spin  { to { transform: rotate(360deg); } }
-    @keyframes blink { 0%,100%{opacity:.4;transform:scale(.8)} 50%{opacity:1;transform:scale(1.1)} }
+    .mandala::after { inset: 20px; border-color: rgba(201,168,76,0.25); }
+    .mandala-inner {
+      position: absolute; inset: 35px;
+      background: var(--gold);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse {
+      0%,100% { opacity: 0.6; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
 
-    #ls h1 {
+    #loading-screen h1 {
       font-family: 'Cinzel', serif;
-      font-size: 1.5rem; letter-spacing: .3em;
-      color: #c9a84c;
-      text-shadow: 0 0 20px rgba(201,168,76,.5);
+      font-size: clamp(1.4rem, 5vw, 2rem);
+      letter-spacing: 0.25em;
+      color: var(--gold);
+      text-shadow: 0 0 30px var(--glow);
     }
-    #ls p { margin-top: 6px; font-size: .75rem; letter-spacing: .1em; color: #a08040; }
+    #loading-screen p {
+      margin-top: 10px;
+      font-size: 0.85rem;
+      letter-spacing: 0.1em;
+      opacity: 0.6;
+    }
+    .load-bar {
+      width: 200px; height: 2px;
+      background: rgba(201,168,76,0.2);
+      margin-top: 24px;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .load-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--gold), var(--gold-light));
+      width: 0%;
+      transition: width 0.4s ease;
+    }
 
-    .bar { width: 180px; height: 2px; background: rgba(201,168,76,.15); margin-top: 18px; border-radius: 2px; overflow: hidden; }
-    .bar-fill { height: 100%; background: linear-gradient(90deg,#c9a84c,#f0d080); width: 0%; transition: width .3s; }
-    #lt { margin-top: 9px; font-size: .66rem; letter-spacing: .07em; color: #806030; text-align: center; max-width: 240px; }
-
-    /* ── HUD ── */
-    #hud {
-      position: fixed; inset: 0; z-index: 200;
+    /* ── UI OVERLAY ── */
+    #ui-overlay {
+      position: fixed; inset: 0;
       pointer-events: none;
+      z-index: 10;
       display: flex; flex-direction: column;
       justify-content: space-between;
-      padding: 28px 22px 36px;
+      padding: 28px 24px 36px;
     }
 
-    .h-top { display: flex; justify-content: space-between; align-items: flex-start; }
-
-    .h-title {
+    /* header */
+    .header {
+      display: flex; align-items: flex-start;
+      justify-content: space-between;
+    }
+    .header-title {
       font-family: 'Cinzel', serif;
-      font-size: 1rem; letter-spacing: .18em;
-      color: #c9a84c;
-      text-shadow: 0 0 12px rgba(201,168,76,.5), 0 1px 4px rgba(0,0,0,.8);
-      line-height: 1.5;
+      font-size: clamp(0.9rem, 3vw, 1.2rem);
+      letter-spacing: 0.2em;
+      color: var(--gold);
+      text-shadow: 0 0 20px var(--glow);
+      line-height: 1.4;
     }
-    .h-sub { font-size: .6rem; letter-spacing: .1em; color: #9a7a3a; text-transform: uppercase; }
-
-    .chip {
-      background: rgba(0,0,0,.45);
-      border: 1px solid rgba(201,168,76,.35);
-      border-radius: 20px; padding: 4px 12px;
-      font-size: .62rem; letter-spacing: .1em;
-      color: #f0d080;
-      backdrop-filter: blur(8px);
-      font-family: 'Cinzel', serif;
+    .header-sub {
+      font-size: 0.68rem;
+      letter-spacing: 0.12em;
+      opacity: 0.5;
+      margin-top: 3px;
+      text-transform: uppercase;
+    }
+    .badge {
+      background: rgba(201,168,76,0.12);
+      border: 1px solid rgba(201,168,76,0.35);
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      color: var(--gold-light);
+      backdrop-filter: blur(6px);
     }
 
-    /* ── TOAST ── */
-    #toast {
-      position: fixed; top: 50%; left: 50%;
+    /* status */
+    #status-msg {
+      position: fixed;
+      top: 50%;
+      left: 50%;
       transform: translate(-50%, -50%);
+      text-align: center;
       font-family: 'Cinzel', serif;
-      font-size: .82rem; letter-spacing: .08em;
-      color: #e8d5b0; text-align: center;
-      background: rgba(0,0,0,.72);
-      border: 1px solid rgba(201,168,76,.3);
-      border-radius: 10px;
-      padding: 14px 20px;
-      backdrop-filter: blur(12px);
-      opacity: 0; transition: opacity .4s;
+      font-size: clamp(0.85rem, 3vw, 1rem);
+      letter-spacing: 0.12em;
+      color: var(--lotus);
+      opacity: 0;
+      transition: opacity 0.5s;
       pointer-events: none;
-      width: 80vw; max-width: 300px;
-      z-index: 250; line-height: 1.5;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.8);
+      background: rgba(13,10,6,0.6);
+      padding: 14px 24px;
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 8px;
+      backdrop-filter: blur(8px);
+      width: 80vw;
+      max-width: 340px;
     }
-    #toast.show { opacity: 1; }
+    #status-msg.visible { opacity: 1; }
 
-    /* ── SCAN RING ── */
-    #scan {
-      position: fixed; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 72px; height: 72px;
-      border: 2px solid rgba(201,168,76,.75);
-      border-radius: 50%;
-      opacity: 0; transition: opacity .4s;
-      pointer-events: none; z-index: 210;
-      animation: scanpulse 1.2s ease-in-out infinite;
-    }
-    #scan.show { opacity: 1; }
-    @keyframes scanpulse {
-      0%,100% { transform: translate(-50%,-50%) scale(1);    border-color: rgba(201,168,76,.75); }
-      50%     { transform: translate(-50%,-50%) scale(1.35); border-color: rgba(201,168,76,.2); }
-    }
-
-    /* ── BUTTONS ── */
-    .h-btns {
-      display: flex; flex-direction: column;
-      align-items: center; gap: 10px;
+    /* bottom controls */
+    .controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
       pointer-events: all;
     }
-    .hints {
-      display: flex; gap: 14px;
-      font-size: .6rem; letter-spacing: .05em;
-      color: rgba(255,255,255,.4);
-      text-shadow: 0 1px 3px rgba(0,0,0,.8);
-    }
 
-    .btn-gold {
-      background: linear-gradient(135deg, #c9a84c, #7a5c10);
-      border: none; border-radius: 50px;
-      padding: 14px 38px;
+    .btn-ar {
+      background: linear-gradient(135deg, #c9a84c, #8b6914);
+      border: none;
+      border-radius: 50px;
+      padding: 16px 44px;
       font-family: 'Cinzel', serif;
-      font-size: .9rem; letter-spacing: .16em;
-      color: #fff; cursor: pointer;
-      box-shadow: 0 4px 22px rgba(201,168,76,.4), 0 2px 8px rgba(0,0,0,.5);
-      transition: transform .15s, opacity .2s;
+      font-size: 1rem;
+      letter-spacing: 0.18em;
+      color: #fff;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 30px rgba(201,168,76,0.4);
+      transition: transform 0.2s, box-shadow 0.2s;
     }
-    .btn-gold:active { transform: scale(.95); }
-    .btn-gold:disabled { opacity: .35; cursor: not-allowed; }
+    .btn-ar::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+    }
+    .btn-ar:active { transform: scale(0.96); box-shadow: 0 2px 16px rgba(201,168,76,0.25); }
+    .btn-ar:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    .btn-ghost {
-      background: rgba(0,0,0,.4);
-      border: 1px solid rgba(201,168,76,.3);
-      border-radius: 50px; padding: 8px 22px;
+    .btn-ar-stop {
+      background: rgba(139,99,50,0.25);
+      border: 1px solid rgba(201,168,76,0.4);
+      border-radius: 50px;
+      padding: 10px 28px;
       font-family: 'Cinzel', serif;
-      font-size: .68rem; letter-spacing: .1em;
-      color: #f0d080; cursor: pointer;
-      backdrop-filter: blur(8px);
-      display: none; transition: background .2s;
-    }
-    .btn-ghost:active { background: rgba(100,70,0,.5); }
-
-    .btn-row { display: flex; gap: 10px; }
-
-    /* Error banner */
-    #errBanner {
+      font-size: 0.78rem;
+      letter-spacing: 0.14em;
+      color: var(--gold-light);
+      cursor: pointer;
       display: none;
-      position: fixed; bottom: 110px; left: 50%;
-      transform: translateX(-50%);
-      background: rgba(180,30,30,.85);
-      border: 1px solid rgba(255,100,100,.4);
-      border-radius: 10px; padding: 10px 18px;
+      backdrop-filter: blur(6px);
+      transition: background 0.2s;
+    }
+    .btn-ar-stop:active { background: rgba(139,99,50,0.5); }
+
+    .hint-row {
+      display: flex; gap: 20px;
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      opacity: 0.45;
+      text-align: center;
+    }
+
+    /* reticle ring */
+    #reticle-info {
+      position: fixed;
+      bottom: 160px;
+      width: 100%;
+      text-align: center;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      opacity: 0;
+      color: var(--gold-light);
+      pointer-events: none;
+      transition: opacity 0.5s;
+    }
+    #reticle-info.visible { opacity: 0.7; }
+
+    /* 3D preview label */
+    .preview-label {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, calc(-50% - 120px));
       font-family: 'Cinzel', serif;
-      font-size: .72rem; letter-spacing: .06em;
-      color: #ffdede; text-align: center;
-      max-width: 90vw; z-index: 260;
-      backdrop-filter: blur(10px);
+      font-size: 0.72rem;
+      letter-spacing: 0.2em;
+      color: var(--gold);
+      opacity: 0;
+      transition: opacity 1s 0.5s;
+      text-transform: uppercase;
+    }
+    .preview-label.visible { opacity: 0.6; }
+
+    /* incense particles */
+    .particles-canvas {
+      position: fixed; inset: 0;
+      pointer-events: none;
+      z-index: 2;
     }
   </style>
 </head>
 <body>
 
-<!-- LOADING -->
-<div id="ls">
-  <div class="ring"></div>
+<!-- Loading -->
+<div id="loading-screen">
+  <div class="mandala"><div class="mandala-inner"></div></div>
   <h1>BUDDHA AR</h1>
-  <p>Vesak Stone Statue</p>
-  <div class="bar"><div class="bar-fill" id="bf"></div></div>
-  <div id="lt">Initialising…</div>
+  <p>Stone Statue · WebXR Experience</p>
+  <div class="load-bar"><div class="load-fill" id="load-fill"></div></div>
 </div>
 
-<div id="scan"></div>
-<div id="toast"></div>
-<div id="errBanner"></div>
+<!-- Incense particle canvas -->
+<canvas class="particles-canvas" id="particles"></canvas>
 
-<canvas id="c"></canvas>
+<!-- Three.js canvas -->
+<canvas id="three-canvas"></canvas>
 
-<div id="hud">
-  <div class="h-top">
+<!-- Status -->
+<div id="status-msg">Move your device slowly to detect a surface…</div>
+
+<!-- Reticle hint -->
+<div id="reticle-info">✦ Tap to place the statue on the surface ✦</div>
+
+<!-- Preview label -->
+<div class="preview-label" id="preview-label">3D Preview</div>
+
+<!-- UI -->
+<div id="ui-overlay">
+  <div class="header">
     <div>
-      <div class="h-title">Buddha AR<br><span class="h-sub">Vesak Stone Statue</span></div>
+      <div class="header-title">Buddha AR<br><span class="header-sub">Vesak Stone Statue</span></div>
     </div>
-    <div class="chip" id="chip">WebXR</div>
+    <div class="badge" id="ar-badge">WebXR</div>
   </div>
-  <div class="h-btns">
-    <div class="hints" id="hints">
+
+  <div class="controls">
+    <div class="hint-row">
       <span>🔆 Pinch to Scale</span>
       <span>👆 Drag to Rotate</span>
+      <span>📍 Tap to Place</span>
     </div>
-    <button class="btn-gold" id="btnAR" disabled>Loading…</button>
-    <div class="btn-row">
-      <button class="btn-ghost" id="btnExit">✕ Exit AR</button>
-      <button class="btn-ghost" id="btnMove">↺ Move</button>
-    </div>
+    <button class="btn-ar" id="btn-ar">✦ Enter AR</button>
+    <button class="btn-ar-stop" id="btn-stop">✕ Exit AR</button>
   </div>
 </div>
 
 <script>
-// ── Renderer ──────────────────────────────────────────────────────────────────
-const canvas = document.getElementById('c');
+// ══════════════════════════════════════════════
+//  PARTICLE SYSTEM (incense smoke)
+// ══════════════════════════════════════════════
+(function() {
+  const canvas = document.getElementById('particles');
+  const ctx = canvas.getContext('2d');
+  let W, H, particles = [];
 
-const renderer = new THREE.WebGLRenderer({
-  canvas,
-  antialias: true,
-  alpha: true,
-  powerPreference: 'high-performance'
-});
+  function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+  resize();
+  window.addEventListener('resize', resize);
+
+  class Particle {
+    constructor() { this.reset(); }
+    reset() {
+      this.x = W * 0.5 + (Math.random() - 0.5) * 60;
+      this.y = H * 0.72;
+      this.vx = (Math.random() - 0.5) * 0.4;
+      this.vy = -(Math.random() * 0.7 + 0.3);
+      this.life = 0;
+      this.maxLife = 120 + Math.random() * 80;
+      this.size = Math.random() * 3 + 1;
+    }
+    update() {
+      this.life++;
+      this.x += this.vx + Math.sin(this.life * 0.04) * 0.3;
+      this.y += this.vy;
+      this.vx *= 0.99;
+      if (this.life >= this.maxLife) this.reset();
+    }
+    draw() {
+      const t = this.life / this.maxLife;
+      const alpha = t < 0.2 ? t/0.2 : 1 - (t-0.2)/0.8;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size * (1 + t), 0, Math.PI*2);
+      ctx.fillStyle = `rgba(201,168,76,${alpha * 0.18})`;
+      ctx.fill();
+    }
+  }
+
+  for (let i = 0; i < 40; i++) {
+    const p = new Particle();
+    p.life = Math.floor(Math.random() * p.maxLife);
+    particles.push(p);
+  }
+
+  function loop() {
+    ctx.clearRect(0, 0, W, H);
+    particles.forEach(p => { p.update(); p.draw(); });
+    requestAnimationFrame(loop);
+  }
+  loop();
+})();
+
+// ══════════════════════════════════════════════
+//  THREE.JS + WEBXR
+// ══════════════════════════════════════════════
+const canvas    = document.getElementById('three-canvas');
+const loadFill  = document.getElementById('load-fill');
+const loadScr   = document.getElementById('loading-screen');
+const statusEl  = document.getElementById('status-msg');
+const reticleEl = document.getElementById('reticle-info');
+const previewLb = document.getElementById('preview-label');
+const btnAR     = document.getElementById('btn-ar');
+const btnStop   = document.getElementById('btn-stop');
+const arBadge   = document.getElementById('ar-badge');
+
+// ── Renderer ──
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
-renderer.setClearColor(0x000000, 0);
-renderer.autoClear = true;
 renderer.xr.enabled = true;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.4;
+renderer.toneMappingExposure = 1.2;
+
+// ── Scene ──
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0d0a06, 0.04);
+
+// ── Camera ──
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.01, 100);
+camera.position.set(0, 0.8, 2.2);
 
 window.addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
@@ -252,443 +402,443 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
 });
 
-// ── Scene & Camera ────────────────────────────────────────────────────────────
-const scene  = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.01, 100);
-camera.position.set(0, 1, 2.5);
-
-// ── Lights ────────────────────────────────────────────────────────────────────
-const ambient = new THREE.HemisphereLight(0xfff5e0, 0x443322, 0.9);
+// ── Lights ──
+const ambient = new THREE.AmbientLight(0xfff5e0, 0.6);
 scene.add(ambient);
 
-const sun = new THREE.DirectionalLight(0xfff5d0, 1.5);
-sun.position.set(2, 6, 3);
-sun.castShadow = true;
-sun.shadow.mapSize.set(1024, 1024);
-sun.shadow.camera.near = 0.01;
-sun.shadow.camera.far  = 10;
-sun.shadow.camera.left = sun.shadow.camera.bottom = -1.5;
-sun.shadow.camera.right = sun.shadow.camera.top   =  1.5;
-sun.shadow.bias = -0.002;
-scene.add(sun);
+const sunLight = new THREE.DirectionalLight(0xfff0d0, 1.4);
+sunLight.position.set(3, 6, 4);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(1024, 1024);
+sunLight.shadow.camera.near = 0.1;
+sunLight.shadow.camera.far = 20;
+scene.add(sunLight);
 
-const fill = new THREE.DirectionalLight(0x88aaff, 0.4);
-fill.position.set(-3, 2, -2);
-scene.add(fill);
+const rimLight = new THREE.DirectionalLight(0x80c0ff, 0.3);
+rimLight.position.set(-3, 2, -3);
+scene.add(rimLight);
 
-const glowLight = new THREE.PointLight(0xc9a84c, 0.8, 4);
-glowLight.position.set(0, 0.8, 0.3);
-scene.add(glowLight);
+const goldFill = new THREE.PointLight(0xc9a84c, 0.8, 5);
+goldFill.position.set(0, 1, 1);
+scene.add(goldFill);
 
-// ── Preview ground (non-AR only) ──────────────────────────────────────────────
-const previewGround = new THREE.Mesh(
-  (() => { const g = new THREE.CircleGeometry(3, 64); g.rotateX(-Math.PI / 2); return g; })(),
-  new THREE.MeshStandardMaterial({ color: 0x1a1207, roughness: .95, transparent: true, opacity: .6 })
-);
-previewGround.receiveShadow = true;
-previewGround.position.y = -0.001;
-scene.add(previewGround);
-
-// ── AR shadow receiver ────────────────────────────────────────────────────────
-const arShadow = new THREE.Mesh(
-  new THREE.PlaneGeometry(3, 3),
-  new THREE.ShadowMaterial({ opacity: 0.35, depthWrite: false })
-);
-arShadow.rotation.x = -Math.PI / 2;
-arShadow.receiveShadow = true;
-arShadow.visible = false;
-scene.add(arShadow);
-
-// ── Statue group ──────────────────────────────────────────────────────────────
-const statueGroup = new THREE.Group();
-scene.add(statueGroup);
-
-// ── Reticle ───────────────────────────────────────────────────────────────────
-const retGeom = new THREE.RingGeometry(0.1, 0.13, 40);
-retGeom.rotateX(-Math.PI / 2);
-const reticle = new THREE.Mesh(retGeom,
-  new THREE.MeshBasicMaterial({ color: 0xc9a84c, side: THREE.DoubleSide, transparent: true, opacity: .9 })
-);
+// ── Reticle (AR surface indicator) ──
+const reticleGeo = new THREE.RingGeometry(0.08, 0.1, 36);
+reticleGeo.rotateX(-Math.PI / 2);
+const reticleMat = new THREE.MeshBasicMaterial({ color: 0xc9a84c, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+const reticle    = new THREE.Mesh(reticleGeo, reticleMat);
 reticle.matrixAutoUpdate = false;
 reticle.visible = false;
 scene.add(reticle);
 
-const haloGeom = new THREE.RingGeometry(0.1, 0.115, 40);
-haloGeom.rotateX(-Math.PI / 2);
-const haloMat = new THREE.MeshBasicMaterial({ color: 0xf0d080, transparent: true, opacity: 0, side: THREE.DoubleSide });
-const halo = new THREE.Mesh(haloGeom, haloMat);
-reticle.add(halo);
+// Reticle pulse ring
+const pulsGeo = new THREE.RingGeometry(0.08, 0.09, 36);
+pulsGeo.rotateX(-Math.PI / 2);
+const pulsMat = new THREE.MeshBasicMaterial({ color: 0xf0d080, transparent: true, opacity: 0, side: THREE.DoubleSide });
+const pulseRing = new THREE.Mesh(pulsGeo, pulsMat);
+reticle.add(pulseRing);
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function setProgress(pct, msg) {
-  document.getElementById('bf').style.width = pct + '%';
-  if (msg) document.getElementById('lt').textContent = msg;
+// ── GLTFLoader (manual fetch+parse from raw GitHub) ──
+// We build a simple stone-look procedural statue as fallback,
+// and also attempt to load the real GLB.
+let statue = null;
+let statueGroup = new THREE.Group();
+scene.add(statueGroup);
+
+// ── Procedural Stone Buddha (fallback + always shown in preview) ──
+function buildProceduralBuddha() {
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x8b7355, roughness: 0.85, metalness: 0.05,
+    envMapIntensity: 0.5
+  });
+
+  const group = new THREE.Group();
+
+  // Base / pedestal
+  const baseGeo = new THREE.CylinderGeometry(0.26, 0.3, 0.08, 12);
+  const base = new THREE.Mesh(baseGeo, mat);
+  base.position.y = 0;
+  base.castShadow = true;
+  group.add(base);
+
+  // Lotus seat
+  const lotusGeo = new THREE.CylinderGeometry(0.2, 0.24, 0.06, 12);
+  const lotus = new THREE.Mesh(lotusGeo, mat);
+  lotus.position.y = 0.07;
+  lotus.castShadow = true;
+  group.add(lotus);
+
+  // Body
+  const bodyGeo = new THREE.SphereGeometry(0.16, 12, 10, 0, Math.PI*2, 0, Math.PI*0.65);
+  const body = new THREE.Mesh(bodyGeo, mat);
+  body.position.y = 0.22;
+  body.castShadow = true;
+  group.add(body);
+
+  // Shoulders
+  const shoulderGeo = new THREE.SphereGeometry(0.19, 12, 6, 0, Math.PI*2, 0, Math.PI*0.35);
+  const shoulders = new THREE.Mesh(shoulderGeo, mat);
+  shoulders.position.y = 0.30;
+  shoulders.castShadow = true;
+  group.add(shoulders);
+
+  // Neck
+  const neckGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.08, 10);
+  const neck = new THREE.Mesh(neckGeo, mat);
+  neck.position.y = 0.46;
+  neck.castShadow = true;
+  group.add(neck);
+
+  // Head
+  const headGeo = new THREE.SphereGeometry(0.13, 14, 12);
+  const head = new THREE.Mesh(headGeo, mat);
+  head.scale.y = 1.1;
+  head.position.y = 0.63;
+  head.castShadow = true;
+  group.add(head);
+
+  // Ushnisha (top knot)
+  const ushnishaGeo = new THREE.SphereGeometry(0.055, 10, 8);
+  const ushnisha = new THREE.Mesh(ushnishaGeo, mat);
+  ushnisha.position.y = 0.78;
+  ushnisha.castShadow = true;
+  group.add(ushnisha);
+
+  // Left arm
+  const armGeo = new THREE.CapsuleGeometry ? new THREE.CapsuleGeometry(0.035, 0.16, 4, 6) : new THREE.CylinderGeometry(0.03, 0.035, 0.2, 8);
+  const lArm = new THREE.Mesh(armGeo, mat);
+  lArm.position.set(-0.19, 0.28, 0.06);
+  lArm.rotation.z = 0.5;
+  lArm.rotation.x = 0.3;
+  lArm.castShadow = true;
+  group.add(lArm);
+
+  const rArm = new THREE.Mesh(armGeo, mat);
+  rArm.position.set(0.19, 0.28, 0.06);
+  rArm.rotation.z = -0.5;
+  rArm.rotation.x = 0.3;
+  rArm.castShadow = true;
+  group.add(rArm);
+
+  // Meditation hands (lap)
+  const handGeo = new THREE.SphereGeometry(0.055, 8, 6);
+  handGeo.scale(1.4, 0.5, 1);
+  const hands = new THREE.Mesh(handGeo, mat);
+  hands.position.set(0, 0.19, 0.12);
+  hands.castShadow = true;
+  group.add(hands);
+
+  return group;
 }
 
-let toastTimer;
-function toast(msg, dur = 0) {
-  const el = document.getElementById('toast');
-  el.innerHTML = msg;
-  el.classList.add('show');
-  clearTimeout(toastTimer);
-  if (dur > 0) toastTimer = setTimeout(() => el.classList.remove('show'), dur);
-}
-function hideToast() { document.getElementById('toast').classList.remove('show'); }
+const proceduralBuddha = buildProceduralBuddha();
+statueGroup.add(proceduralBuddha);
 
-function showError(msg) {
-  const b = document.getElementById('errBanner');
-  b.textContent = msg;
-  b.style.display = 'block';
-  setTimeout(() => b.style.display = 'none', 6000);
+// ── Try loading real GLB ──
+const GLB_URL = 'https://raw.githubusercontent.com/ThinukaVinjaya/vesakmodels/main/stone_buddha_statue.glb';
+
+let loadProgress = 0;
+function setProgress(v) {
+  loadProgress = v;
+  loadFill.style.width = v + '%';
 }
 
-// ── Load GLB ──────────────────────────────────────────────────────────────────
-// Using a CORS proxy to avoid GitHub raw content CORS blocks
-const GLB_URL = 'https://corsproxy.io/?url=https://raw.githubusercontent.com/ThinukaVinjaya/vesakmodels/main/stone_buddha_statue.glb';
+async function loadGLTF() {
+  // Dynamic import of GLTFLoader via CDN script injection
+  return new Promise((resolve, reject) => {
+    if (window.THREE_GLTF_LOADER_LOADED) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
+    s.onload = () => { window.THREE_GLTF_LOADER_LOADED = true; resolve(); };
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
 
-let modelLoaded = false;
-setProgress(5, 'Checking loader…');
+(async () => {
+  setProgress(10);
+  await loadGLTF().catch(() => {});
+  setProgress(40);
 
-// Safety check — make sure GLTFLoader actually loaded
-if (typeof THREE.GLTFLoader === 'undefined') {
-  setProgress(0, '⚠ GLTFLoader failed to load. Check your internet connection.');
-  showError('THREE.GLTFLoader not available — CDN may be blocked.');
-} else {
-  setProgress(10, 'Loading model…');
+  if (window.THREE && window.THREE.GLTFLoader) {
+    const loader = new THREE.GLTFLoader();
+    loader.load(
+      GLB_URL,
+      (gltf) => {
+        setProgress(95);
+        const model = gltf.scene;
 
-  const loader = new THREE.GLTFLoader();
+        // Auto-scale to ~0.9m tall
+        const box = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scale = 0.9 / maxDim;
+        model.scale.setScalar(scale);
 
-  loader.load(
-    GLB_URL,
-    (gltf) => {
-      const model = gltf.scene;
+        // Centre at base
+        box.setFromObject(model);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        model.position.sub(center);
+        const newBox = new THREE.Box3().setFromObject(model);
+        model.position.y -= newBox.min.y;
 
-      // Auto-scale to fit 1 m tall
-      const box = new THREE.Box3().setFromObject(model);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      const s = 1.0 / Math.max(size.x, size.y, size.z);
-      model.scale.setScalar(s);
-
-      // Centre X/Z, sit on Y = 0
-      box.setFromObject(model);
-      const centre = new THREE.Vector3();
-      box.getCenter(centre);
-      model.position.x = -centre.x;
-      model.position.z = -centre.z;
-      box.setFromObject(model);
-      model.position.y = -box.min.y;
-
-      model.traverse(c => {
-        if (c.isMesh) {
-          c.castShadow    = true;
-          c.receiveShadow = true;
-          // Ensure materials render correctly
-          if (c.material) {
-            c.material.needsUpdate = true;
+        model.traverse(child => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
           }
+        });
+
+        statueGroup.remove(proceduralBuddha);
+        statueGroup.add(model);
+        statue = model;
+        showStatus('Real statue loaded ✦', 2200);
+        setProgress(100);
+        setTimeout(hideLoading, 400);
+      },
+      (xhr) => {
+        if (xhr.lengthComputable) {
+          const pct = 40 + Math.floor((xhr.loaded / xhr.total) * 55);
+          setProgress(pct);
         }
-      });
-
-      statueGroup.add(model);
-      modelLoaded = true;
-      setProgress(100, 'Model ready ✦');
-      setTimeout(onLoadComplete, 400);
-    },
-    (xhr) => {
-      if (xhr.lengthComputable) {
-        const p = 10 + Math.floor((xhr.loaded / xhr.total) * 87);
-        const kb = Math.round(xhr.loaded / 1024);
-        const total = Math.round(xhr.total / 1024);
-        setProgress(p, `Downloading… ${kb} / ${total} kb`);
+      },
+      (err) => {
+        console.warn('GLB load failed, using procedural model', err);
+        setProgress(100);
+        setTimeout(hideLoading, 400);
       }
-    },
-    (err) => {
-      console.error('GLB load error:', err);
-      // Try fallback: direct URL without proxy
-      setProgress(20, 'Retrying direct URL…');
-      tryDirectLoad();
-    }
-  );
+    );
+  } else {
+    setProgress(100);
+    setTimeout(hideLoading, 400);
+  }
+})();
+
+function hideLoading() {
+  loadScr.classList.add('hidden');
+  setTimeout(() => loadScr.style.display = 'none', 900);
+  previewLb.classList.add('visible');
+  checkARSupport();
 }
 
-// Fallback — try loading directly without proxy
-function tryDirectLoad() {
-  const DIRECT_URL = 'https://raw.githubusercontent.com/ThinukaVinjaya/vesakmodels/main/stone_buddha_statue.glb';
-  const loader2 = new THREE.GLTFLoader();
-  loader2.load(
-    DIRECT_URL,
-    (gltf) => {
-      const model = gltf.scene;
-      const box = new THREE.Box3().setFromObject(model);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      model.scale.setScalar(1.0 / Math.max(size.x, size.y, size.z));
-      box.setFromObject(model);
-      const c = new THREE.Vector3();
-      box.getCenter(c);
-      model.position.set(-c.x, -box.min.y, -c.z);
-      model.traverse(ch => {
-        if (ch.isMesh) { ch.castShadow = true; ch.receiveShadow = true; }
-      });
-      statueGroup.add(model);
-      modelLoaded = true;
-      setProgress(100, 'Model ready ✦');
-      setTimeout(onLoadComplete, 400);
-    },
-    null,
-    (err2) => {
-      console.error('Direct load also failed:', err2);
-      document.getElementById('lt').textContent = '⚠ Could not load model. Check GitHub URL / CORS.';
-      document.getElementById('lt').style.color = '#ff6060';
-      setProgress(100);
-      showError('Model load failed. The GitHub repo or file name may have changed.');
-      // Still open loading screen so user can try AR without model
-      setTimeout(onLoadComplete, 1500);
-    }
-  );
+// ── Ground (preview mode) ──
+const groundGeo = new THREE.CircleGeometry(3, 64);
+groundGeo.rotateX(-Math.PI / 2);
+const groundMat = new THREE.MeshStandardMaterial({
+  color: 0x1a1408, roughness: 0.9, metalness: 0.0,
+  transparent: true, opacity: 0.5
+});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.receiveShadow = true;
+ground.position.y = -0.001;
+scene.add(ground);
+
+// ── Shadow disc under statue ──
+const shadowGeo = new THREE.CircleGeometry(0.3, 32);
+shadowGeo.rotateX(-Math.PI / 2);
+const shadowMat = new THREE.MeshBasicMaterial({
+  color: 0x000000, transparent: true, opacity: 0.35
+});
+const shadowDisc = new THREE.Mesh(shadowGeo, shadowMat);
+shadowDisc.position.y = 0.002;
+statueGroup.add(shadowDisc);
+
+// ── Touch / pointer rotation (preview mode) ──
+let isAR = false;
+let touchStartX = 0, prevTouchDist = 0;
+let isDown = false;
+
+canvas.addEventListener('pointerdown', e => { isDown = true; touchStartX = e.clientX; });
+canvas.addEventListener('pointerup',   () => { isDown = false; });
+canvas.addEventListener('pointermove', e => {
+  if (!isDown || isAR) return;
+  statueGroup.rotation.y += (e.clientX - touchStartX) * 0.01;
+  touchStartX = e.clientX;
+});
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    prevTouchDist = Math.sqrt(dx*dx + dy*dy);
+  }
+}, { passive: true });
+canvas.addEventListener('touchmove', e => {
+  if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const delta = dist - prevTouchDist;
+    statueGroup.scale.multiplyScalar(1 + delta * 0.005);
+    statueGroup.scale.clampScalar(0.1, 3);
+    prevTouchDist = dist;
+  }
+}, { passive: true });
+
+// ── AR variables ──
+let hitTestSource = null;
+let hitTestSourceRequested = false;
+let placed = false;
+let controller;
+let arSession = null;
+let pulseT = 0;
+
+// ── Status helper ──
+let statusTimer;
+function showStatus(msg, duration = 0) {
+  statusEl.textContent = msg;
+  statusEl.classList.add('visible');
+  clearTimeout(statusTimer);
+  if (duration > 0) statusTimer = setTimeout(() => statusEl.classList.remove('visible'), duration);
 }
+function hideStatus() { statusEl.classList.remove('visible'); }
 
-function onLoadComplete() {
-  const ls = document.getElementById('ls');
-  ls.classList.add('out');
-  setTimeout(() => ls.style.display = 'none', 800);
-  checkAR();
-}
-
-// ── AR Support ────────────────────────────────────────────────────────────────
-const btnAR   = document.getElementById('btnAR');
-const btnExit = document.getElementById('btnExit');
-const btnMove = document.getElementById('btnMove');
-const chip    = document.getElementById('chip');
-const scanEl  = document.getElementById('scan');
-
-async function checkAR() {
+// ── Check AR support ──
+async function checkARSupport() {
   if (!navigator.xr) {
-    btnAR.textContent = '⚠ WebXR unavailable';
-    btnAR.disabled = false;
-    toast('WebXR not available. Enjoy the 3D preview!', 5000);
+    btnAR.textContent = '⚠ WebXR not available';
+    btnAR.disabled = true;
     return;
   }
   const supported = await navigator.xr.isSessionSupported('immersive-ar').catch(() => false);
   if (!supported) {
     btnAR.textContent = '⚠ AR not supported';
+    btnAR.disabled = true;
+    arBadge.textContent = 'Preview Mode';
+    showStatus('AR not supported on this device. Enjoy the 3D preview!', 5000);
+  } else {
     btnAR.disabled = false;
-    toast('No AR support on this device.\nEnjoy the 3D preview!', 5000);
-    return;
+    btnAR.textContent = '✦ Enter AR';
   }
-  btnAR.textContent = '✦ Place on My Floor';
-  btnAR.disabled = false;
 }
 
-// ── AR Session ────────────────────────────────────────────────────────────────
-let isAR = false, placed = false, moving = false;
-let arSession = null, controller = null;
-let hitSrc = null, hitReq = false;
-let pulseT = 0;
-
+// ── Start AR ──
 async function startAR() {
-  if (!modelLoaded) { toast('Model still loading…', 2000); return; }
-
   try {
     arSession = await navigator.xr.requestSession('immersive-ar', {
-      requiredFeatures : ['hit-test'],
-      optionalFeatures : ['dom-overlay', 'light-estimation'],
-      domOverlay       : { root: document.body }
+      requiredFeatures: ['hit-test'],
+      optionalFeatures: ['dom-overlay', 'anchors'],
+      domOverlay: { root: document.getElementById('ui-overlay') }
     });
 
-    // FIX: use 'local-floor' for correct real-world Y = 0 (floor level)
-    // This is the key fix for proper floor placement
-    renderer.xr.setReferenceSpaceType('local-floor');
+    renderer.xr.setReferenceSpaceType('local');
     await renderer.xr.setSession(arSession);
 
-    isAR = true; placed = false; moving = false;
-    hitSrc = null; hitReq = false;
+    isAR = true;
+    placed = false;
+    hitTestSourceRequested = false;
+    hitTestSource = null;
 
-    previewGround.visible = false;
-    scene.background      = null;
-    scene.fog             = null;
-    arShadow.visible      = true;
-    statueGroup.visible   = false;
+    statueGroup.visible = false;
+    scene.fog = null;
+    ground.visible = false;
 
     controller = renderer.xr.getController(0);
-    controller.addEventListener('select', onTap);
+    controller.addEventListener('select', onSelect);
     scene.add(controller);
 
-    btnAR.style.display   = 'none';
-    btnExit.style.display = 'inline-block';
-    chip.textContent      = '● AR Active';
+    btnAR.style.display = 'none';
+    btnStop.style.display = 'inline-block';
+    previewLb.classList.remove('visible');
+    arBadge.textContent = '● AR Live';
 
-    scanEl.classList.add('show');
-    toast('Point your camera at the floor<br>and move your phone slowly…');
+    showStatus('Move your phone to detect a flat surface…');
+    reticleEl.classList.add('visible');
 
     arSession.addEventListener('end', onAREnd);
-
-  } catch (e) {
-    console.error('AR start error:', e);
-    toast('Could not start AR: ' + e.message, 5000);
+  } catch(err) {
+    console.error(err);
+    showStatus('Could not start AR: ' + err.message, 4000);
   }
 }
 
 function onAREnd() {
-  isAR = false; placed = false; moving = false;
-  hitSrc = null; hitReq = false;
+  isAR = false;
+  placed = false;
+  hitTestSource = null;
+  hitTestSourceRequested = false;
 
-  previewGround.visible = true;
-  arShadow.visible      = false;
-  reticle.visible       = false;
-  statueGroup.visible   = true;
+  statueGroup.visible = true;
   statueGroup.position.set(0, 0, 0);
   statueGroup.rotation.set(0, 0, 0);
-  statueGroup.scale.set(1, 1, 1);
+  scene.fog = new THREE.FogExp2(0x0d0a06, 0.04);
+  ground.visible = true;
+  reticle.visible = false;
+  reticleEl.classList.remove('visible');
 
-  scanEl.classList.remove('show');
-  hideToast();
-
-  btnAR.style.display   = 'inline-block';
-  btnExit.style.display = 'none';
-  btnMove.style.display = 'none';
-  chip.textContent      = 'WebXR';
+  btnAR.style.display = 'inline-block';
+  btnStop.style.display = 'none';
+  previewLb.classList.add('visible');
+  arBadge.textContent = 'WebXR';
+  hideStatus();
 }
 
-function onTap() {
-  if (!reticle.visible) return;
-
-  const pos = new THREE.Vector3();
-  pos.setFromMatrixPosition(reticle.matrix);
-
-  statueGroup.position.copy(pos);
-  arShadow.position.set(pos.x, pos.y, pos.z);
-  statueGroup.visible = true;
-  reticle.visible     = false;
-  scanEl.classList.remove('show');
-  moving = false;
-  btnMove.textContent = '↺ Move';
-
-  if (!placed) {
-    placed = true;
-    btnMove.style.display = 'inline-block';
-    toast('Buddha placed! ✦<br>Pinch to scale · Drag to rotate', 4000);
-  } else {
-    hideToast();
+function onSelect() {
+  if (reticle.visible) {
+    if (!placed) {
+      statueGroup.position.setFromMatrixPosition(reticle.matrix);
+      statueGroup.rotation.y = Math.random() * Math.PI * 2;
+      statueGroup.visible = true;
+      placed = true;
+      reticleEl.classList.remove('visible');
+      showStatus('Statue placed ✦ Pinch to scale · Drag to rotate', 3500);
+    } else {
+      // Re-place
+      statueGroup.position.setFromMatrixPosition(reticle.matrix);
+    }
   }
 }
-
-btnMove.addEventListener('click', () => {
-  if (!isAR) return;
-  moving = true;
-  reticle.visible = true;
-  scanEl.classList.add('show');
-  btnMove.textContent = '📍 Tap to place';
-  toast('Aim at the floor and tap to place…');
-});
 
 btnAR.addEventListener('click', startAR);
-btnExit.addEventListener('click', () => { if (arSession) arSession.end(); });
+btnStop.addEventListener('click', () => { if (arSession) arSession.end(); });
 
-// ── Touch gestures: rotate + pinch-scale ──────────────────────────────────────
-let pointerDown = false, lastPointerX = 0, prevPinchDist = 0;
-
-canvas.addEventListener('pointerdown', e => { pointerDown = true; lastPointerX = e.clientX; });
-canvas.addEventListener('pointerup', () => { pointerDown = false; });
-canvas.addEventListener('pointermove', e => {
-  if (!pointerDown) return;
-  statueGroup.rotation.y += (e.clientX - lastPointerX) * 0.014;
-  lastPointerX = e.clientX;
-});
-canvas.addEventListener('touchstart', e => {
-  if (e.touches.length === 2) {
-    prevPinchDist = Math.hypot(
-      e.touches[0].clientX - e.touches[1].clientX,
-      e.touches[0].clientY - e.touches[1].clientY
-    );
-  }
-}, { passive: true });
-canvas.addEventListener('touchmove', e => {
-  if (e.touches.length === 2) {
-    const d = Math.hypot(
-      e.touches[0].clientX - e.touches[1].clientX,
-      e.touches[0].clientY - e.touches[1].clientY
-    );
-    statueGroup.scale.multiplyScalar(1 + (d - prevPinchDist) * 0.006);
-    statueGroup.scale.clampScalar(0.05, 8);
-    prevPinchDist = d;
-  }
-}, { passive: true });
-
-// ── Render loop ───────────────────────────────────────────────────────────────
+// ── Preview animation ──
 const clock = new THREE.Clock();
-
 renderer.setAnimationLoop((timestamp, frame) => {
   const dt = clock.getDelta();
-  const et = clock.elapsedTime;
 
   if (!isAR) {
-    statueGroup.visible   = modelLoaded;
-    statueGroup.rotation.y += dt * 0.2;
+    // Gentle preview rotation
+    statueGroup.rotation.y += dt * 0.25;
     camera.position.set(
-      Math.sin(et * 0.11) * 2.6,
-      0.9 + Math.sin(et * 0.08) * 0.2,
-      Math.cos(et * 0.11) * 2.6
+      Math.sin(clock.elapsedTime * 0.15) * 2.2,
+      0.8 + Math.sin(clock.elapsedTime * 0.1) * 0.15,
+      Math.cos(clock.elapsedTime * 0.15) * 2.2
     );
-    camera.lookAt(0, 0.5, 0);
-    glowLight.intensity = 0.8 + Math.sin(et * 1.1) * 0.2;
+    camera.lookAt(0, 0.4, 0);
+    goldFill.intensity = 0.7 + Math.sin(clock.elapsedTime * 1.2) * 0.15;
   }
 
-  // WebXR hit-test for floor detection
+  // AR hit-test
   if (isAR && frame) {
     const refSpace = renderer.xr.getReferenceSpace();
     const session  = renderer.xr.getSession();
 
-    if (!hitReq) {
-      // FIX: request 'viewer' space for hit-test (correct approach)
+    if (!hitTestSourceRequested) {
       session.requestReferenceSpace('viewer').then(viewerSpace => {
-        session.requestHitTestSource({ space: viewerSpace })
-          .then(src => { hitSrc = src; })
-          .catch(e => console.warn('Hit-test source failed:', e));
-      }).catch(e => console.warn('Viewer space failed:', e));
-      hitReq = true;
+        session.requestHitTestSource({ space: viewerSpace }).then(src => {
+          hitTestSource = src;
+        });
+      });
+      hitTestSourceRequested = true;
     }
 
-    if (hitSrc) {
-      const hits = frame.getHitTestResults(hitSrc);
+    if (hitTestSource) {
+      const results = frame.getHitTestResults(hitTestSource);
+      if (results.length > 0) {
+        const hit  = results[0];
+        const pose = hit.getPose(refSpace);
+        reticle.visible = true;
+        reticle.matrix.fromArray(pose.transform.matrix);
 
-      if (hits.length > 0) {
-        const pose = hits[0].getPose(refSpace);
-
-        if (pose) {
-          reticle.matrix.fromArray(pose.transform.matrix);
-
-          // Auto-place on first floor detection
-          if (!placed) {
-            const pos = new THREE.Vector3();
-            pos.setFromMatrixPosition(reticle.matrix);
-            statueGroup.position.copy(pos);
-            arShadow.position.copy(pos);
-            statueGroup.visible = true;
-            placed = true;
-            reticle.visible = false;
-            scanEl.classList.remove('show');
-            btnMove.style.display = 'inline-block';
-            toast('Buddha is on your floor! ✦<br>Pinch to scale · Drag to rotate', 4500);
-          }
-
-          // Smooth follow while repositioning
-          if (moving) {
-            reticle.visible = true;
-            const target = new THREE.Vector3();
-            target.setFromMatrixPosition(reticle.matrix);
-            statueGroup.position.lerp(target, 0.15);
-            arShadow.position.copy(statueGroup.position);
-          }
-
-          // Pulse halo
-          pulseT += dt * 2.2;
-          halo.scale.setScalar(1 + Math.sin(pulseT) * 0.28);
-          haloMat.opacity = Math.max(0, (1 - Math.sin(pulseT)) * 0.4);
-        }
+        // pulse ring
+        pulseT += dt * 2;
+        const pScale = 1 + Math.sin(pulseT) * 0.25;
+        pulseRing.scale.setScalar(pScale);
+        pulsMat.opacity = (1 - Math.sin(pulseT)) * 0.5;
       } else {
-        if (!placed) reticle.visible = false;
+        reticle.visible = false;
       }
     }
   }
