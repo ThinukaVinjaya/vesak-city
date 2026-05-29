@@ -2,115 +2,103 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Vesak Buddha Statue - WebXR AR</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Buddha AR</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/GLTFLoader.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/WebXR.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.134/examples/js/loaders/GLTFLoader.min.js"></script>
+
   <style>
-    body { margin: 0; overflow: hidden; }
-    #info {
-      position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.5);
-      padding: 10px; border-radius: 8px; font-family: Arial, sans-serif; z-index: 100;
-    }
-    button {
-      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-      padding: 12px 24px; font-size: 18px; background: #4CAF50; color: white;
+    body { margin:0; overflow:hidden; background:black; }
+    #startBtn {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      padding: 15px 30px; font-size: 20px; background: #4CAF50; color: white;
       border: none; border-radius: 50px; z-index: 100;
+    }
+    #status {
+      position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.6);
+      padding: 10px; border-radius: 8px; font-family: Arial;
     }
   </style>
 </head>
 <body>
-  <div id="info">Point your camera at a flat surface → Tap to place Buddha</div>
-  <button onclick="startAR()">Start AR Experience</button>
+  <button id="startBtn">Start Buddha AR</button>
+  <div id="status">Waiting...</div>
 
   <script>
-    let scene, camera, renderer;
-    let model;
-    let reticle;
-    let hitTestSource = null;
-    let xrSession = null;
-
     const modelUrl = "https://raw.githubusercontent.com/ThinukaVinjaya/vesakmodels/main/stone_buddha_statue.glb";
+    let scene, camera, renderer, model, reticle;
 
-    async function startAR() {
+    document.getElementById("startBtn").addEventListener("click", async () => {
+      const btn = document.getElementById("startBtn");
+      btn.style.display = "none";
+
       if (!navigator.xr) {
-        alert("WebXR not supported on this browser/device");
+        alert("Your browser does not support WebXR AR");
         return;
       }
 
-      const sessionInit = {
-        requiredFeatures: ['hit-test'],
-        optionalFeatures: ['dom-overlay', 'dom-overlay-for-session']
-      };
-
       try {
-        xrSession = await navigator.xr.requestSession('immersive-ar', sessionInit);
-        document.getElementById('info').style.display = 'none';
-        
-        await renderer.xr.setSession(xrSession);
-        setupAR();
-      } catch (err) {
-        alert("Failed to start AR: " + err.message);
-      }
-    }
-
-    function setupAR() {
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera();
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.xr.enabled = true;
-      document.body.appendChild(renderer.domElement);
-
-      // Lighting
-      const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
-      scene.add(light);
-      const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-      dirLight.position.set(5, 10, 7);
-      scene.add(dirLight);
-
-      // Reticle (visual indicator)
-      const reticleGeometry = new THREE.RingGeometry(0.15, 0.2, 32);
-      const reticleMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
-      reticle = new THREE.Mesh(reticleGeometry, reticleMaterial);
-      reticle.rotation.x = -Math.PI / 2;
-      reticle.visible = false;
-      scene.add(reticle);
-
-      // Load your Buddha model
-      const loader = new THREE.GLTFLoader();
-      loader.load(modelUrl, (gltf) => {
-        model = gltf.scene;
-        model.scale.set(0.8, 0.8, 0.8);   // Adjust size as needed
-        model.position.y = 0.1;           // Slight lift
-        console.log("Buddha model loaded!");
-      }, undefined, (error) => {
-        console.error("Error loading model:", error);
-      });
-
-      // Hit test
-      xrSession.requestReferenceSpace('viewer').then((refSpace) => {
-        xrSession.requestHitTestSource({ space: refSpace }).then((source) => {
-          hitTestSource = source;
+        const session = await navigator.xr.requestSession("immersive-ar", {
+          requiredFeatures: ["hit-test"],
+          optionalFeatures: ["dom-overlay"]
         });
-      });
 
-      renderer.setAnimationLoop(animate);
-    }
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.xr.enabled = true;
+        document.body.appendChild(renderer.domElement);
 
-    function animate(timestamp, frame) {
-      if (!frame) return;
+        await renderer.xr.setSession(session);
 
-      const referenceSpace = renderer.xr.getReferenceSpace();
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera();
 
-      if (hitTestSource && frame) {
-        const hitTestResults = frame.getHitTestResults(hitTestSource);
-        if (hitTestResults.length > 0) {
-          const hit = hitTestResults[0];
-          const pose = hit.getPose(referenceSpace);
-          
+        // Lights
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.5));
+        const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+        sun.position.set(5, 10, 7);
+        scene.add(sun);
+
+        // Reticle
+        reticle = new THREE.Mesh(
+          new THREE.RingGeometry(0.2, 0.25, 32),
+          new THREE.MeshBasicMaterial({ color: 0x00ff88, side: THREE.DoubleSide })
+        );
+        reticle.rotation.x = -Math.PI / 2;
+        reticle.visible = false;
+        scene.add(reticle);
+
+        // Load Buddha
+        const loader = new THREE.GLTFLoader();
+        loader.load(modelUrl, (gltf) => {
+          model = gltf.scene;
+          model.scale.set(1.2, 1.2, 1.2);
+          document.getElementById("status").innerHTML = "Tap on floor to place Buddha";
+        });
+
+        session.requestReferenceSpace("viewer").then((refSpace) => {
+          session.requestHitTestSource({ space: refSpace }).then((hitSource) => {
+            hitTestSource = hitSource;
+          });
+        });
+
+        renderer.setAnimationLoop(animate);
+
+      } catch (e) {
+        console.error(e);
+        alert("Cannot start AR: " + e.message);
+      }
+    });
+
+    let hitTestSource = null;
+
+    function animate(time, frame) {
+      if (frame) {
+        const refSpace = renderer.xr.getReferenceSpace();
+        const hits = frame.getHitTestResults(hitTestSource);
+
+        if (hits.length > 0) {
+          const hit = hits[0];
+          const pose = hit.getPose(refSpace);
           if (pose) {
             reticle.visible = true;
             reticle.position.fromArray(pose.transform.position);
@@ -124,19 +112,13 @@
       renderer.render(scene, camera);
     }
 
-    // Tap on screen to place the statue
-    window.addEventListener('click', () => {
-      if (model && reticle.visible) {
-        const clone = model.clone();
-        clone.position.copy(reticle.position);
-        clone.quaternion.copy(reticle.quaternion);
-        scene.add(clone);
-      }
-    });
-
-    window.addEventListener('resize', () => {
-      if (renderer) {
-        renderer.setSize(window.innerWidth, window.innerHeight);
+    // Place model when tapping
+    window.addEventListener("click", () => {
+      if (model && reticle && reticle.visible) {
+        const placedModel = model.clone();
+        placedModel.position.copy(reticle.position);
+        placedModel.quaternion.copy(reticle.quaternion);
+        scene.add(placedModel);
       }
     });
   </script>
