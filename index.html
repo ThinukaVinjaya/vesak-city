@@ -8,100 +8,235 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap');
-    *{box-sizing:border-box;margin:0;padding:0}
-    :root{--gold:#c9a84c;--gold2:#f0d080;--dark:#0d0a06;--lotus:#e8d5b0}
-    html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Lato',sans-serif;color:var(--lotus)}
-    canvas#c{position:fixed;inset:0;display:block}
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    /* LOADING */
-    #ls{position:fixed;inset:0;background:radial-gradient(ellipse at center,#1a1408,#0d0a06);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:200;transition:opacity .7s}
-    #ls.out{opacity:0;pointer-events:none}
-    .ring{width:100px;height:100px;border:2px solid var(--gold);border-radius:50%;animation:spin 6s linear infinite;margin-bottom:20px;box-shadow:0 0 30px rgba(201,168,76,.4);position:relative}
-    .ring::after{content:'';position:absolute;inset:30px;background:var(--gold);border-radius:50%;animation:pulse 2s ease-in-out infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
-    @keyframes pulse{0%,100%{opacity:.5;transform:scale(.85)}50%{opacity:1;transform:scale(1.1)}}
-    #ls h1{font-family:'Cinzel',serif;font-size:1.6rem;letter-spacing:.3em;color:var(--gold);text-shadow:0 0 20px rgba(201,168,76,.5)}
-    #ls p{margin-top:6px;font-size:.78rem;letter-spacing:.12em;opacity:.5}
-    .bar{width:180px;height:2px;background:rgba(201,168,76,.2);margin-top:18px;border-radius:2px;overflow:hidden}
-    .bar-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--gold2));width:0%;transition:width .3s}
-    #lt{margin-top:8px;font-size:.68rem;letter-spacing:.07em;opacity:.4;text-align:center}
+    /* CRITICAL: body must be transparent so camera feed shows in AR */
+    html, body {
+      width: 100%; height: 100%;
+      background: transparent;
+      overflow: hidden;
+    }
 
-    /* HUD */
-    #hud{position:fixed;inset:0;pointer-events:none;z-index:50;display:flex;flex-direction:column;justify-content:space-between;padding:24px 20px 32px}
-    .top{display:flex;justify-content:space-between;align-items:flex-start}
-    .title{font-family:'Cinzel',serif;font-size:1.05rem;letter-spacing:.2em;color:var(--gold);text-shadow:0 0 15px rgba(201,168,76,.4);line-height:1.5}
-    .sub{font-size:.62rem;letter-spacing:.12em;opacity:.45;text-transform:uppercase}
-    .chip{background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);border-radius:20px;padding:4px 12px;font-size:.65rem;letter-spacing:.1em;color:var(--gold2);backdrop-filter:blur(6px)}
+    /* Canvas fills screen, transparent background handled in JS */
+    #c {
+      position: fixed;
+      inset: 0;
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
 
-    /* STATUS TOAST */
-    #toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Cinzel',serif;font-size:.88rem;letter-spacing:.1em;color:var(--lotus);text-align:center;background:rgba(13,10,6,.7);border:1px solid rgba(201,168,76,.25);border-radius:10px;padding:14px 22px;backdrop-filter:blur(10px);opacity:0;transition:opacity .4s;pointer-events:none;width:82vw;max-width:320px;z-index:100}
-    #toast.show{opacity:1}
+    /* ── LOADING ── */
+    #ls {
+      position: fixed; inset: 0; z-index: 300;
+      background: radial-gradient(ellipse at center, #1a1408, #080502);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      transition: opacity .7s ease;
+    }
+    #ls.out { opacity: 0; pointer-events: none; }
 
-    /* SCANNING RING - shown while searching for floor */
-    #scan{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80px;height:80px;border:2px solid rgba(201,168,76,.7);border-radius:50%;opacity:0;transition:opacity .4s;pointer-events:none;animation:scanpulse 1.2s ease-in-out infinite;z-index:80}
-    #scan.show{opacity:1}
-    @keyframes scanpulse{0%,100%{transform:translate(-50%,-50%) scale(1);border-color:rgba(201,168,76,.7)}50%{transform:translate(-50%,-50%) scale(1.3);border-color:rgba(201,168,76,.2)}}
+    .ring {
+      width: 90px; height: 90px;
+      border: 2px solid #c9a84c;
+      border-radius: 50%;
+      position: relative;
+      animation: spin 6s linear infinite;
+      margin-bottom: 20px;
+      box-shadow: 0 0 30px rgba(201,168,76,.4);
+    }
+    .ring::after {
+      content: '';
+      position: absolute; inset: 28px;
+      background: #c9a84c; border-radius: 50%;
+      animation: blink 2s ease-in-out infinite;
+    }
+    @keyframes spin  { to { transform: rotate(360deg); } }
+    @keyframes blink { 0%,100%{opacity:.4;transform:scale(.8)} 50%{opacity:1;transform:scale(1.1)} }
 
-    /* BOTTOM BUTTONS */
-    .btns{display:flex;flex-direction:column;align-items:center;gap:10px;pointer-events:all}
-    .hints{display:flex;gap:16px;font-size:.63rem;letter-spacing:.06em;opacity:.38;margin-bottom:2px}
-    .btn-main{background:linear-gradient(135deg,#c9a84c,#7a5c10);border:none;border-radius:50px;padding:14px 40px;font-family:'Cinzel',serif;font-size:.95rem;letter-spacing:.18em;color:#fff;cursor:pointer;box-shadow:0 4px 25px rgba(201,168,76,.4);transition:transform .15s,opacity .2s}
-    .btn-main:active{transform:scale(.95)}
-    .btn-main:disabled{opacity:.35;cursor:not-allowed}
-    .btn-exit{background:rgba(120,80,20,.2);border:1px solid rgba(201,168,76,.3);border-radius:50px;padding:8px 24px;font-family:'Cinzel',serif;font-size:.72rem;letter-spacing:.12em;color:var(--gold2);cursor:pointer;display:none;backdrop-filter:blur(6px)}
-    .btn-sm{background:rgba(120,80,20,.15);border:1px solid rgba(201,168,76,.2);border-radius:30px;padding:7px 18px;font-size:.68rem;letter-spacing:.1em;color:var(--gold2);cursor:pointer;display:none;font-family:'Cinzel',serif;backdrop-filter:blur(4px)}
-    .btn-row{display:flex;gap:10px}
+    #ls h1 {
+      font-family: 'Cinzel', serif;
+      font-size: 1.5rem; letter-spacing: .3em;
+      color: #c9a84c;
+      text-shadow: 0 0 20px rgba(201,168,76,.5);
+    }
+    #ls p { margin-top: 6px; font-size: .75rem; letter-spacing: .1em; color: #a08040; }
+
+    .bar { width: 180px; height: 2px; background: rgba(201,168,76,.15); margin-top: 18px; border-radius: 2px; overflow: hidden; }
+    .bar-fill { height: 100%; background: linear-gradient(90deg,#c9a84c,#f0d080); width: 0%; transition: width .3s; }
+    #lt { margin-top: 9px; font-size: .66rem; letter-spacing: .07em; color: #806030; text-align: center; max-width: 220px; }
+
+    /* ── HUD (always on top, transparent bg) ── */
+    #hud {
+      position: fixed; inset: 0; z-index: 200;
+      pointer-events: none;
+      display: flex; flex-direction: column;
+      justify-content: space-between;
+      padding: 28px 22px 36px;
+    }
+
+    .h-top { display: flex; justify-content: space-between; align-items: flex-start; }
+
+    .h-title {
+      font-family: 'Cinzel', serif;
+      font-size: 1rem; letter-spacing: .18em;
+      color: #c9a84c;
+      text-shadow: 0 0 12px rgba(201,168,76,.5), 0 1px 4px rgba(0,0,0,.8);
+      line-height: 1.5;
+    }
+    .h-sub { font-size: .6rem; letter-spacing: .1em; color: #9a7a3a; text-transform: uppercase; }
+
+    .chip {
+      background: rgba(0,0,0,.45);
+      border: 1px solid rgba(201,168,76,.35);
+      border-radius: 20px; padding: 4px 12px;
+      font-size: .62rem; letter-spacing: .1em;
+      color: #f0d080;
+      backdrop-filter: blur(8px);
+      font-family: 'Cinzel', serif;
+    }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Cinzel', serif;
+      font-size: .82rem; letter-spacing: .08em;
+      color: #e8d5b0; text-align: center;
+      background: rgba(0,0,0,.72);
+      border: 1px solid rgba(201,168,76,.3);
+      border-radius: 10px;
+      padding: 14px 20px;
+      backdrop-filter: blur(12px);
+      opacity: 0; transition: opacity .4s;
+      pointer-events: none;
+      width: 80vw; max-width: 300px;
+      z-index: 250;
+      line-height: 1.5;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── SCAN RING (shown while searching for floor) ── */
+    #scan {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 72px; height: 72px;
+      border: 2px solid rgba(201,168,76,.75);
+      border-radius: 50%;
+      opacity: 0; transition: opacity .4s;
+      pointer-events: none;
+      z-index: 210;
+      animation: scanpulse 1.2s ease-in-out infinite;
+    }
+    #scan.show { opacity: 1; }
+    @keyframes scanpulse {
+      0%,100% { transform: translate(-50%,-50%) scale(1);   border-color: rgba(201,168,76,.75); }
+      50%     { transform: translate(-50%,-50%) scale(1.35); border-color: rgba(201,168,76,.2); }
+    }
+
+    /* ── BUTTONS ── */
+    .h-btns {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 10px;
+      pointer-events: all;
+    }
+    .hints {
+      display: flex; gap: 14px;
+      font-size: .6rem; letter-spacing: .05em;
+      color: rgba(255,255,255,.4);
+      text-shadow: 0 1px 3px rgba(0,0,0,.8);
+    }
+
+    .btn-gold {
+      background: linear-gradient(135deg, #c9a84c, #7a5c10);
+      border: none; border-radius: 50px;
+      padding: 14px 38px;
+      font-family: 'Cinzel', serif;
+      font-size: .9rem; letter-spacing: .16em;
+      color: #fff; cursor: pointer;
+      box-shadow: 0 4px 22px rgba(201,168,76,.4), 0 2px 8px rgba(0,0,0,.5);
+      transition: transform .15s, opacity .2s;
+    }
+    .btn-gold:active { transform: scale(.95); }
+    .btn-gold:disabled { opacity: .35; cursor: not-allowed; }
+
+    .btn-ghost {
+      background: rgba(0,0,0,.4);
+      border: 1px solid rgba(201,168,76,.3);
+      border-radius: 50px; padding: 8px 22px;
+      font-family: 'Cinzel', serif;
+      font-size: .68rem; letter-spacing: .1em;
+      color: #f0d080; cursor: pointer;
+      backdrop-filter: blur(8px);
+      display: none;
+      transition: background .2s;
+    }
+    .btn-ghost:active { background: rgba(100,70,0,.5); }
+
+    .btn-row { display: flex; gap: 10px; }
   </style>
 </head>
 <body>
 
-<!-- LOADING SCREEN -->
+<!-- LOADING -->
 <div id="ls">
   <div class="ring"></div>
   <h1>BUDDHA AR</h1>
-  <p>Stone Statue · Vesak Experience</p>
+  <p>Vesak Stone Statue</p>
   <div class="bar"><div class="bar-fill" id="bf"></div></div>
   <div id="lt">Loading model…</div>
 </div>
 
-<!-- SCANNING RING -->
+<!-- SCAN INDICATOR -->
 <div id="scan"></div>
 
-<!-- STATUS TOAST -->
+<!-- TOAST -->
 <div id="toast"></div>
 
-<!-- THREE CANVAS -->
+<!-- THREE.JS CANVAS -->
 <canvas id="c"></canvas>
 
 <!-- HUD -->
 <div id="hud">
-  <div class="top">
+  <div class="h-top">
     <div>
-      <div class="title">Buddha AR<br><span class="sub">Vesak Stone Statue</span></div>
+      <div class="h-title">Buddha AR<br><span class="h-sub">Vesak Stone Statue</span></div>
     </div>
     <div class="chip" id="chip">WebXR</div>
   </div>
-  <div class="btns">
+  <div class="h-btns">
     <div class="hints" id="hints">
-      <span>🔆 Pinch Scale</span>
-      <span>👆 Drag Rotate</span>
+      <span>🔆 Pinch to Scale</span>
+      <span>👆 Drag to Rotate</span>
     </div>
-    <button class="btn-main" id="btnAR" disabled>Loading…</button>
+    <button class="btn-gold" id="btnAR" disabled>Loading…</button>
     <div class="btn-row">
-      <button class="btn-exit" id="btnExit">✕ Exit AR</button>
-      <button class="btn-sm"   id="btnReplace">↺ Move Statue</button>
+      <button class="btn-ghost" id="btnExit">✕ Exit AR</button>
+      <button class="btn-ghost" id="btnMove">↺ Move</button>
     </div>
   </div>
 </div>
 
 <script>
-// ─────────────────────────────────────────────
-//  RENDERER + SCENE
-// ─────────────────────────────────────────────
-const canvas   = document.getElementById('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+// ═══════════════════════════════════════════
+//  RENDERER — alpha:true + clear settings
+//  are the key to seeing the camera feed
+// ═══════════════════════════════════════════
+const canvas = document.getElementById('c');
+
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias : true,
+  alpha     : true,   // transparent canvas so camera shows through
+  powerPreference: 'high-performance'
+});
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
+
+// CRITICAL — tell Three.js not to clear the camera background in AR
+renderer.setClearColor(0x000000, 0);   // fully transparent clear colour
+renderer.autoClear = true;
+
 renderer.xr.enabled        = true;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
@@ -109,231 +244,257 @@ renderer.outputEncoding    = THREE.sRGBEncoding;
 renderer.toneMapping       = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.4;
 
-const scene  = new THREE.Scene();
-scene.fog    = new THREE.FogExp2(0x0d0a06, 0.05);
-
-const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.01, 100);
-camera.position.set(0, 0.9, 2.4);
-
 window.addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
 });
 
-// ─── LIGHTS ───
-scene.add(new THREE.AmbientLight(0xffe8b0, 0.8));
+// ─── SCENE ───
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.01, 100);
+camera.position.set(0, 1, 2.5);
 
+// ─── LIGHTS ───
+// Ambient — warm daylight
+const ambient = new THREE.HemisphereLight(0xfff5e0, 0x443322, 0.9);
+scene.add(ambient);
+
+// Key light
 const sun = new THREE.DirectionalLight(0xfff5d0, 1.5);
-sun.position.set(3, 8, 4);
+sun.position.set(2, 6, 3);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.near = 0.1;
-sun.shadow.camera.far  = 20;
-sun.shadow.camera.left = sun.shadow.camera.bottom = -2;
-sun.shadow.camera.right = sun.shadow.camera.top   =  2;
+sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.camera.near = 0.01;
+sun.shadow.camera.far  = 10;
+sun.shadow.camera.left = sun.shadow.camera.bottom = -1.5;
+sun.shadow.camera.right = sun.shadow.camera.top   =  1.5;
+sun.shadow.bias = -0.002;
 scene.add(sun);
 
-const fill = new THREE.DirectionalLight(0x88bbff, 0.35);
-fill.position.set(-4, 3, -3);
+// Fill
+const fill = new THREE.DirectionalLight(0x88aaff, 0.4);
+fill.position.set(-3, 2, -2);
 scene.add(fill);
 
-const glow = new THREE.PointLight(0xc9a84c, 1.0, 5);
-glow.position.set(0, 1.5, 0.5);
-scene.add(glow);
+// Warm glow at statue base
+const glowLight = new THREE.PointLight(0xc9a84c, 0.8, 4);
+glowLight.position.set(0, 0.8, 0.3);
+scene.add(glowLight);
 
-// ─── PREVIEW GROUND ───
-const groundMesh = new THREE.Mesh(
-  new THREE.CircleGeometry(3, 64),
-  new THREE.MeshStandardMaterial({ color:0x1a1408, roughness:.9, transparent:true, opacity:.5 })
+// ─── PREVIEW GROUND (hidden in AR) ───
+const previewGround = new THREE.Mesh(
+  (() => { const g = new THREE.CircleGeometry(3,64); g.rotateX(-Math.PI/2); return g; })(),
+  new THREE.MeshStandardMaterial({ color:0x1a1207, roughness:.95, transparent:true, opacity:.6 })
 );
-groundMesh.geometry.rotateX(-Math.PI/2);
-groundMesh.receiveShadow = true;
-groundMesh.position.y    = -0.001;
-scene.add(groundMesh);
+previewGround.receiveShadow = true;
+previewGround.position.y = -0.001;
+scene.add(previewGround);
 
-// ─── SHADOW RECEIVER (AR floor) ───
-const shadowFloor = new THREE.Mesh(
-  new THREE.PlaneGeometry(4, 4),
-  new THREE.ShadowMaterial({ opacity: 0.4 })
+// ─── AR SHADOW RECEIVER ───
+// Invisible plane that only catches shadows in AR
+const arShadow = new THREE.Mesh(
+  new THREE.PlaneGeometry(3, 3),
+  new THREE.ShadowMaterial({ opacity: 0.35, depthWrite: false })
 );
-shadowFloor.rotation.x  = -Math.PI / 2;
-shadowFloor.receiveShadow = true;
-shadowFloor.visible      = false;
-scene.add(shadowFloor);
+arShadow.rotation.x = -Math.PI / 2;
+arShadow.receiveShadow = true;
+arShadow.visible = false;
+scene.add(arShadow);
 
 // ─── STATUE GROUP ───
 const statueGroup = new THREE.Group();
-statueGroup.visible = false;
 scene.add(statueGroup);
 
-// ─── RETICLE ───
-const retGeo = new THREE.RingGeometry(0.1, 0.13, 40);
-retGeo.rotateX(-Math.PI/2);
-const reticle = new THREE.Mesh(retGeo,
+// ─── RETICLE (floor indicator) ───
+const retGeom = new THREE.RingGeometry(0.1, 0.13, 40);
+retGeom.rotateX(-Math.PI / 2);
+const reticle = new THREE.Mesh(retGeom,
   new THREE.MeshBasicMaterial({ color:0xc9a84c, side:THREE.DoubleSide, transparent:true, opacity:.9 })
 );
 reticle.matrixAutoUpdate = false;
 reticle.visible = false;
 scene.add(reticle);
 
-// inner pulse ring
-const pGeo = new THREE.RingGeometry(0.06, 0.1, 40);
-pGeo.rotateX(-Math.PI/2);
-const pMat = new THREE.MeshBasicMaterial({ color:0xf0d080, transparent:true, opacity:0, side:THREE.DoubleSide });
-const pulseR = new THREE.Mesh(pGeo, pMat);
-reticle.add(pulseR);
+// Pulse halo on reticle
+const haloGeom = new THREE.RingGeometry(0.1, 0.115, 40);
+haloGeom.rotateX(-Math.PI / 2);
+const haloMat = new THREE.MeshBasicMaterial({ color:0xf0d080, transparent:true, opacity:0, side:THREE.DoubleSide });
+const halo = new THREE.Mesh(haloGeom, haloMat);
+reticle.add(halo);
 
 // ─── LOAD GLB ───
-const GLB = 'https://raw.githubusercontent.com/ThinukaVinjaya/vesakmodels/main/stone_buddha_statue.glb';
-let modelReady = false;
+const GLB_URL = 'https://raw.githubusercontent.com/ThinukaVinjaya/vesakmodels/main/stone_buddha_statue.glb';
+let modelLoaded = false;
 
-function setP(v, msg) {
-  document.getElementById('bf').style.width = v+'%';
+function setProgress(pct, msg) {
+  document.getElementById('bf').style.width = pct + '%';
   if (msg) document.getElementById('lt').textContent = msg;
 }
 
-const loader = new THREE.GLTFLoader();
-loader.load(
-  GLB,
+const gltfLoader = new THREE.GLTFLoader();
+
+gltfLoader.load(
+  GLB_URL,
   (gltf) => {
     const model = gltf.scene;
-    // Scale to 1 m tall
+
+    // Auto-scale: fit tallest axis = 1 m
     const box  = new THREE.Box3().setFromObject(model);
     const size = new THREE.Vector3();
     box.getSize(size);
-    model.scale.setScalar(1.0 / Math.max(size.x, size.y, size.z));
-    // Sit on Y=0
+    const scaleFactor = 1.0 / Math.max(size.x, size.y, size.z);
+    model.scale.setScalar(scaleFactor);
+
+    // Centre X/Z, rest on Y = 0
     box.setFromObject(model);
-    const ctr = new THREE.Vector3();
-    box.getCenter(ctr);
-    model.position.x = -ctr.x;
-    model.position.z = -ctr.z;
+    const centre = new THREE.Vector3();
+    box.getCenter(centre);
+    model.position.x = -centre.x;
+    model.position.z = -centre.z;
     box.setFromObject(model);
     model.position.y = -box.min.y;
 
-    model.traverse(c => {
-      if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; }
+    model.traverse(child => {
+      if (child.isMesh) {
+        child.castShadow    = true;
+        child.receiveShadow = true;
+      }
     });
+
     statueGroup.add(model);
-    statueGroup.visible = true;
-    modelReady = true;
-    setP(100, 'Model ready ✦');
-    setTimeout(finishLoad, 300);
+    modelLoaded = true;
+    setProgress(100, 'Model ready ✦');
+
+    setTimeout(onLoadComplete, 400);
   },
   (xhr) => {
     if (xhr.lengthComputable) {
-      const p = 5 + Math.floor((xhr.loaded/xhr.total)*92);
-      setP(p, `Loading… ${Math.round(xhr.loaded/1024)} kb / ${Math.round(xhr.total/1024)} kb`);
+      const p = 5 + Math.floor((xhr.loaded / xhr.total) * 92);
+      const kb = Math.round(xhr.loaded / 1024);
+      const total = Math.round(xhr.total / 1024);
+      setProgress(p, `Loading… ${kb} / ${total} kb`);
     }
   },
   (err) => {
-    console.error(err);
-    document.getElementById('lt').textContent = '⚠ Failed – check network';
-    document.getElementById('lt').style.color = '#ff6b6b';
+    console.error('GLB failed:', err);
+    document.getElementById('lt').textContent = '⚠ Failed to load model';
+    document.getElementById('lt').style.color = '#ff6060';
   }
 );
 
-function finishLoad() {
+function onLoadComplete() {
   const ls = document.getElementById('ls');
   ls.classList.add('out');
-  setTimeout(() => ls.style.display='none', 800);
-  document.getElementById('preview-label') && document.getElementById('preview-label').classList.add('visible');
+  setTimeout(() => ls.style.display = 'none', 800);
   checkAR();
 }
 
-// ─── UI HELPERS ───
+// ─── TOAST ───
 let toastTimer;
-function toast(msg, dur=0) {
+function toast(msg, dur = 0) {
   const el = document.getElementById('toast');
-  el.textContent = msg;
+  el.innerHTML = msg;
   el.classList.add('show');
   clearTimeout(toastTimer);
-  if (dur) toastTimer = setTimeout(() => el.classList.remove('show'), dur);
+  if (dur > 0) toastTimer = setTimeout(() => el.classList.remove('show'), dur);
 }
 function hideToast() { document.getElementById('toast').classList.remove('show'); }
 
-const btnAR      = document.getElementById('btnAR');
-const btnExit    = document.getElementById('btnExit');
-const btnReplace = document.getElementById('btnReplace');
-const chip       = document.getElementById('chip');
-const scanEl     = document.getElementById('scan');
-
-// ─── AR STATE ───
-let isAR       = false;
-let placed     = false;
-let arSession  = null;
-let controller = null;
-let hitSrc     = null;
-let hitReq     = false;
-let pulseT     = 0;
-let replacing  = false;  // tap-to-move mode
+// ─── AR SUPPORT CHECK ───
+const btnAR   = document.getElementById('btnAR');
+const btnExit = document.getElementById('btnExit');
+const btnMove = document.getElementById('btnMove');
+const chip    = document.getElementById('chip');
+const scanEl  = document.getElementById('scan');
 
 async function checkAR() {
   if (!navigator.xr) {
-    btnAR.textContent = '⚠ WebXR not available'; btnAR.disabled = false; return;
-  }
-  const ok = await navigator.xr.isSessionSupported('immersive-ar').catch(()=>false);
-  if (!ok) {
-    btnAR.textContent = '⚠ AR not supported'; btnAR.disabled = false;
-    toast('AR not supported on this device.\nEnjoy the 3D preview!', 5000);
+    btnAR.textContent = '⚠ WebXR unavailable';
+    btnAR.disabled = false;
     return;
   }
-  btnAR.textContent = '✦ Place in My Room';
+  const supported = await navigator.xr.isSessionSupported('immersive-ar').catch(() => false);
+  if (!supported) {
+    btnAR.textContent = '⚠ AR not supported on this device';
+    btnAR.disabled = false;
+    toast('No AR support detected.\nEnjoy the 3D preview!', 5000);
+    return;
+  }
+  btnAR.textContent = '✦ Place on My Floor';
   btnAR.disabled    = false;
 }
 
+// ─── AR SESSION ───
+let isAR        = false;
+let placed      = false;
+let moving      = false;
+let arSession   = null;
+let controller  = null;
+let hitSrc      = null;
+let hitReq      = false;
+let pulseT      = 0;
+
 async function startAR() {
+  if (!modelLoaded) { toast('Model still loading…', 2000); return; }
+
   try {
     arSession = await navigator.xr.requestSession('immersive-ar', {
       requiredFeatures : ['hit-test'],
       optionalFeatures : ['dom-overlay', 'light-estimation'],
-      domOverlay       : { root: document.getElementById('hud').parentElement }
+      domOverlay       : { root: document.body }   // full body so HUD shows in AR
     });
+
+    // CRITICAL: local reference space for AR
     renderer.xr.setReferenceSpaceType('local');
     await renderer.xr.setSession(arSession);
 
-    isAR      = true;
-    placed    = false;
-    replacing = false;
-    hitSrc    = null;
-    hitReq    = false;
+    isAR   = true;
+    placed = false;
+    moving = false;
+    hitSrc = null;
+    hitReq = false;
 
-    // Hide preview stuff
-    scene.fog    = null;
-    groundMesh.visible = false;
-    shadowFloor.visible = true;
-    statueGroup.visible = false;   // hide until first placement
+    // Hide preview-mode things
+    previewGround.visible = false;
+    scene.background      = null;   // ensure no background in AR
+    scene.fog             = null;
 
-    // Controller tap
+    // Show AR shadow receiver
+    arShadow.visible = true;
+
+    // Hide statue until floor found
+    statueGroup.visible = false;
+
+    // Set up tap controller
     controller = renderer.xr.getController(0);
     controller.addEventListener('select', onTap);
     scene.add(controller);
 
-    btnAR.style.display    = 'none';
-    btnExit.style.display  = 'inline-block';
-    chip.textContent       = '● AR Live';
+    // UI
+    btnAR.style.display   = 'none';
+    btnExit.style.display = 'inline-block';
+    chip.textContent      = '● AR Active';
 
-    // Start with scanning state
     scanEl.classList.add('show');
-    toast('Point your camera at the floor and move slowly…');
+    toast('Point camera at the floor<br>and move your phone slowly…');
 
     arSession.addEventListener('end', onAREnd);
   } catch(e) {
-    console.error(e);
-    toast('Could not start AR: ' + e.message, 4000);
+    console.error('AR start error:', e);
+    toast('AR failed: ' + e.message, 4000);
   }
 }
 
 function onAREnd() {
-  isAR = false; placed = false; replacing = false;
+  isAR = false; placed = false; moving = false;
   hitSrc = null; hitReq = false;
 
-  scene.fog = new THREE.FogExp2(0x0d0a06, 0.05);
-  groundMesh.visible  = true;
-  shadowFloor.visible = false;
-  reticle.visible     = false;
-  statueGroup.visible = true;
+  // Restore preview
+  previewGround.visible = true;
+  arShadow.visible      = false;
+  reticle.visible       = false;
+  statueGroup.visible   = true;
   statueGroup.position.set(0, 0, 0);
   statueGroup.rotation.set(0, 0, 0);
   statueGroup.scale.set(1, 1, 1);
@@ -341,103 +502,110 @@ function onAREnd() {
   scanEl.classList.remove('show');
   hideToast();
 
-  btnAR.style.display      = 'inline-block';
-  btnExit.style.display    = 'none';
-  btnReplace.style.display = 'none';
-  chip.textContent         = 'WebXR';
+  btnAR.style.display   = 'inline-block';
+  btnExit.style.display = 'none';
+  btnMove.style.display = 'none';
+  chip.textContent      = 'WebXR';
 }
 
-// Called on each tap in AR
+// Place or move statue on tap
 function onTap() {
   if (!reticle.visible) return;
 
-  // Place / re-place statue at reticle
-  statueGroup.position.setFromMatrixPosition(reticle.matrix);
-  shadowFloor.position.setFromMatrixPosition(reticle.matrix);
+  const pos = new THREE.Vector3();
+  pos.setFromMatrixPosition(reticle.matrix);
+
+  statueGroup.position.copy(pos);
+  arShadow.position.set(pos.x, pos.y, pos.z);
   statueGroup.visible = true;
   reticle.visible     = false;
   scanEl.classList.remove('show');
+  moving = false;
+  btnMove.textContent = '↺ Move';
 
   if (!placed) {
     placed = true;
-    btnReplace.style.display = 'inline-block';
-    toast('Buddha placed! ✦  Pinch to scale · Drag to rotate', 3500);
-  } else if (replacing) {
-    replacing = false;
-    btnReplace.textContent = '↺ Move Statue';
-    reticle.visible = false;
-    toast('Moved! ✦', 1800);
+    btnMove.style.display = 'inline-block';
+    toast('Buddha is on your floor! ✦<br>Pinch to scale · Drag to rotate', 4000);
+  } else {
+    hideToast();
   }
 }
 
-// Move-statue button: show reticle again
-btnReplace.addEventListener('click', () => {
+// Move button
+btnMove.addEventListener('click', () => {
   if (!isAR) return;
-  replacing = true;
+  moving = true;
   reticle.visible = true;
   scanEl.classList.add('show');
-  btnReplace.textContent = '📍 Tap to Place';
-  toast('Aim at the floor and tap to reposition…');
+  btnMove.textContent = '📍 Tap to place';
+  toast('Aim at the floor and tap…');
 });
 
 btnAR.addEventListener('click', startAR);
 btnExit.addEventListener('click', () => { if (arSession) arSession.end(); });
 
-// ─── TOUCH CONTROLS (preview + AR scale/rotate) ───
-let isDown=false, lastX=0, prevDist=0;
+// ─── TOUCH: rotate + pinch-scale ───
+let pointerDown = false, lastPointerX = 0, prevPinchDist = 0;
 
-canvas.addEventListener('pointerdown', e => { isDown=true; lastX=e.clientX; });
-canvas.addEventListener('pointerup',   ()  => { isDown=false; });
+canvas.addEventListener('pointerdown', e => { pointerDown = true; lastPointerX = e.clientX; });
+canvas.addEventListener('pointerup',   ()  => { pointerDown = false; });
 canvas.addEventListener('pointermove', e => {
-  if (!isDown) return;
-  statueGroup.rotation.y += (e.clientX - lastX) * 0.013;
-  lastX = e.clientX;
+  if (!pointerDown) return;
+  statueGroup.rotation.y += (e.clientX - lastPointerX) * 0.014;
+  lastPointerX = e.clientX;
 });
 canvas.addEventListener('touchstart', e => {
   if (e.touches.length === 2) {
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
-    prevDist = Math.sqrt(dx*dx + dy*dy);
+    prevPinchDist = Math.hypot(dx, dy);
   }
-}, { passive:true });
+}, { passive: true });
 canvas.addEventListener('touchmove', e => {
   if (e.touches.length === 2) {
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
-    const d  = Math.sqrt(dx*dx + dy*dy);
-    statueGroup.scale.multiplyScalar(1 + (d - prevDist) * 0.006);
-    statueGroup.scale.clampScalar(0.05, 6);
-    prevDist = d;
+    const d  = Math.hypot(dx, dy);
+    const factor = 1 + (d - prevPinchDist) * 0.006;
+    statueGroup.scale.multiplyScalar(factor);
+    statueGroup.scale.clampScalar(0.05, 8);
+    prevPinchDist = d;
   }
-}, { passive:true });
+}, { passive: true });
 
 // ─── RENDER LOOP ───
 const clock = new THREE.Clock();
 
 renderer.setAnimationLoop((timestamp, frame) => {
   const dt = clock.getDelta();
+  const et = clock.elapsedTime;
 
-  // Preview rotation
   if (!isAR) {
-    statueGroup.rotation.y += dt * 0.22;
+    // Preview: orbit camera
+    statueGroup.visible   = modelLoaded;
+    statueGroup.rotation.y += dt * 0.2;
     camera.position.set(
-      Math.sin(clock.elapsedTime * 0.12) * 2.5,
-      0.9 + Math.sin(clock.elapsedTime * 0.09) * 0.15,
-      Math.cos(clock.elapsedTime * 0.12) * 2.5
+      Math.sin(et * 0.11) * 2.6,
+      0.9 + Math.sin(et * 0.08) * 0.2,
+      Math.cos(et * 0.11) * 2.6
     );
     camera.lookAt(0, 0.5, 0);
-    glow.intensity = 0.9 + Math.sin(clock.elapsedTime * 1.2) * 0.2;
+    glowLight.intensity = 0.8 + Math.sin(et * 1.1) * 0.2;
   }
 
-  // AR hit-test → floor detection
+  // ── WebXR hit-test ──
   if (isAR && frame) {
     const refSpace = renderer.xr.getReferenceSpace();
     const session  = renderer.xr.getSession();
 
+    // Request hit-test source once
     if (!hitReq) {
-      session.requestReferenceSpace('viewer').then(vs =>
-        session.requestHitTestSource({ space: vs }).then(src => { hitSrc = src; })
-      );
+      session.requestReferenceSpace('viewer').then(viewerSpace => {
+        session.requestHitTestSource({ space: viewerSpace }).then(src => {
+          hitSrc = src;
+        });
+      });
       hitReq = true;
     }
 
@@ -448,37 +616,41 @@ renderer.setAnimationLoop((timestamp, frame) => {
         const pose = hits[0].getPose(refSpace);
         reticle.matrix.fromArray(pose.transform.matrix);
 
-        // AUTO-PLACE on very first detection (no tap needed)
+        // AUTO-PLACE: on very first detection place statue instantly
         if (!placed) {
-          reticle.visible = true;          // show for a moment so user sees it
-          // place statue immediately at first detected surface
           statueGroup.position.setFromMatrixPosition(reticle.matrix);
-          shadowFloor.position.setFromMatrixPosition(reticle.matrix);
+          arShadow.position.set(
+            statueGroup.position.x,
+            statueGroup.position.y,
+            statueGroup.position.z
+          );
           statueGroup.visible = true;
           placed = true;
-          scanEl.classList.remove('show');
           reticle.visible = false;
-          btnReplace.style.display = 'inline-block';
-          toast('Buddha is on your floor! ✦  Pinch to scale · Drag to rotate · Tap "Move" to reposition', 4500);
+          scanEl.classList.remove('show');
+          btnMove.style.display = 'inline-block';
+          toast('Buddha is on your floor! ✦<br>Pinch to scale · Drag to rotate', 4500);
         }
 
-        // While replacing, keep reticle visible
-        if (replacing) {
+        // While user is actively moving the statue, show reticle
+        if (moving) {
           reticle.visible = true;
-          // Track statue loosely to reticle while replacing
+          // Smoothly follow the detected surface
           const target = new THREE.Vector3();
           target.setFromMatrixPosition(reticle.matrix);
-          statueGroup.position.lerp(target, 0.2);
-          shadowFloor.position.copy(statueGroup.position);
+          statueGroup.position.lerp(target, 0.15);
+          arShadow.position.copy(statueGroup.position);
         }
 
-        // Pulse animation
-        pulseT += dt * 2.5;
-        pulseR.scale.setScalar(1 + Math.sin(pulseT) * 0.3);
-        pMat.opacity = (1 - Math.sin(pulseT)) * 0.4;
+        // Pulse the halo ring
+        pulseT += dt * 2.2;
+        halo.scale.setScalar(1 + Math.sin(pulseT) * 0.28);
+        haloMat.opacity = Math.max(0, (1 - Math.sin(pulseT)) * 0.4);
 
       } else {
-        if (!placed) reticle.visible = false;
+        if (!placed) {
+          reticle.visible = false;
+        }
       }
     }
   }
