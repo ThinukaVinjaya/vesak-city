@@ -1,6 +1,7 @@
 import * as THREE from 'https://unpkg.com/three@0.161.0/build/three.module.js';
 import { ARButton } from 'https://unpkg.com/three@0.161.0/examples/jsm/webxr/ARButton.js';
 import { GLTFLoader } from 'https://unpkg.com/three@0.161.0/examples/jsm/loaders/GLTFLoader.js';
+import { OrbitControls } from 'https://unpkg.com/three@0.161.0/examples/jsm/controls/OrbitControls.js';
 
 const container = document.body;
 const scene = new THREE.Scene();
@@ -10,6 +11,10 @@ renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.xr.enabled = true;
 container.appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+camera.position.set(0, 1.5, 3);
+controls.target.set(0, 1, 0);
+controls.update();
 
 const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1.0);
 scene.add(light);
@@ -82,6 +87,22 @@ reticle.matrixAutoUpdate = false;
 reticle.visible = false;
 scene.add(reticle);
 
+const previewGroup = new THREE.Group();
+scene.add(previewGroup);
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(10, 10),
+  new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9, metalness: 0.05 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = 0;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const grid = new THREE.GridHelper(10, 20, 0x444444, 0x222222);
+grid.position.y = 0.001;
+scene.add(grid);
+
 let hitTestSource = null;
 let localSpace = null;
 let placedGroup = null;
@@ -116,11 +137,18 @@ function onSessionStart() {
     localSpace = referenceSpace;
   });
 
+  previewGroup.visible = false;
+  ground.visible = false;
+  grid.visible = false;
+
   session.addEventListener('end', () => {
     hitTestSource = null;
     localSpace = null;
     reticle.visible = false;
     isPlaced = false;
+    previewGroup.visible = true;
+    ground.visible = true;
+    grid.visible = true;
     if (placedGroup) {
       scene.remove(placedGroup);
       placedGroup = null;
@@ -152,6 +180,27 @@ function onSelect() {
   instructions.textContent = 'Vesak scene placed. Move around to view the fixed AR shrine.';
 }
 
+function createPreviewScene() {
+  previewGroup.clear();
+
+  const previewItems = ['stoneBuddha', 'sthupa', 'lotus1'];
+  const positions = {
+    stoneBuddha: [0, 0, 0],
+    sthupa: [1.0, 0, 0.2],
+    lotus1: [-1.0, 0, 0.2]
+  };
+
+  modelConfigs.forEach((config) => {
+    if (!config.scene || previewItems.indexOf(config.name) === -1) return;
+    const clone = config.scene.clone(true);
+    const scale = config.scale * 0.6;
+    clone.scale.setScalar(scale);
+    clone.position.set(...positions[config.name]);
+    clone.rotation.set(...config.rotation);
+    previewGroup.add(clone);
+  });
+}
+
 function loadModels() {
   const promises = modelConfigs.map((config) =>
     loader.loadAsync(config.url).then((gltf) => {
@@ -168,10 +217,13 @@ function loadModels() {
     })
   );
 
-  return Promise.all(promises);
+  return Promise.all(promises).then(() => {
+    createPreviewScene();
+  });
 }
 
 function animate(timestamp, frame) {
+  controls.update();
   if (frame && hitTestSource && localSpace) {
     const hitTestResults = frame.getHitTestResults(hitTestSource);
 
@@ -197,7 +249,7 @@ window.addEventListener('resize', () => {
 
 loadModels().then(() => {
   createARButton();
-  instructions.textContent = 'Ready for AR. Use the button below to start the session.';
+  instructions.textContent = 'Ready for AR. Use the button below to start the session, or use the preview by dragging the scene.';
 });
 
 renderer.xr.addEventListener('sessionstart', onSessionStart);
